@@ -6,6 +6,7 @@
 # - Kovarians
 # - Standardavvikelse
 # - Pearsons korrelationskoeffiecient r
+# - Signifikanstest av r
 # - Enkel linjär OLS regression (Y = α + βX)
 # - Analys av varians (one-way ANOVA)
 # - (T-test)
@@ -72,10 +73,24 @@ pearsonkorrelation <- function(x, y)
   for(i in 1:N)
   {
     SumXY <- SumXY + ((x[i] - mean(x)) * (y[i] - mean(y)))  # Multiplicera avvikelserna från medelvärdena för X och Y.
-    SumXSquared <- SumXSquared + ((x[i] - mean(x)) ^ 2)     # Kvaderera avvikelserna från medelvärdet för X.
-    SumYSquared <- SumYSquared + ((y[i] - mean(y)) ^ 2)     # Kvaderera avvikelserna från medelvärdet för Y.
+    SumXSquared <- SumXSquared + ((x[i] - mean(x)) ^ 2)     # Kvadrera avvikelserna från medelvärdet för X.
+    SumYSquared <- SumYSquared + ((y[i] - mean(y)) ^ 2)     # Kvadrera avvikelserna från medelvärdet för Y.
   }
   return(SumXY / sqrt(SumXSquared * SumYSquared))
+}
+
+
+# Räkna ut signifikans av r (vilket är ett t-test).
+pearsonkorrelationsignifikanstest <- function(x, y)
+{
+  r <- pearsonkorrelation(x, y)                # Först tar vi fram r.
+  N <- length(x)                               # Antal observationer.
+  t <- (r * sqrt(N - 2)) / sqrt(1 - r ^ 2)     # Räkna ut t-värde.
+  df <- N - 2                                  # Degree of freedom.
+  t.crit <- qt(0.975, df)                      # Kritisk t-värde. 0.975 får vi fram genom 1 - 0.05 / 2 (alltså dubbelsidigt test med alpha=0.025).
+  sig <- t >= t.crit                           # Är det signifikant på 0.05-nivån? (Dock: använd aldrig dikotom signifikans, utan använd fullständiga p-värdet!).
+  p <- pt(t, df, lower=F) * 2                  # Tvåsidigt p-värde.
+  return(paste("Korrelation p:", p))           # Returnera text.
 }
 
 
@@ -175,6 +190,7 @@ predicera <- function(y, x)
   ci.upper <- b + (t.crit * b.stderr) # Övre gräns.
       
   # Fishers F för hela modellen (vilket alltid bör vara >1 om vi gjort rätt då distributionen bara har en svans).
+  # Notera också att t^2 = F.
   Fval <- (R2 / k) / ((1-R2) / (N-k-1))
   
   # Räkna ut p-värde.
@@ -287,7 +303,9 @@ cov(x, y)
 pearsonkorrelation(x, y)
 cor(x, y)
 
-# OLS regression.
+pearsonkorrelationsignifikanstest(x, y)
+cor.test(x, y)
+
 enkellinjarregression(y, x) # Skriv ut intercept+b+beta
 predicera(y, x) # Skriv ut R2, F, b stderr m.m.
 
@@ -305,7 +323,7 @@ summary(fit)
 # Multiple R-squared:  0.7696,  Adjusted R-squared:  0.7408 
 # F-statistic: 26.72 on 1 and 8 DF,  p-value: 0.0008537
 
-# One-way ANOA.
+# One-way ANOVA.
 onewayanova(group1, group2, group3)
 
 # Jämför med inbyggda aov-funktionen.
