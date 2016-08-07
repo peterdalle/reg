@@ -6,6 +6,7 @@
 # - Kovarians
 # - Standardavvikelse
 # - Pearsons korrelationskoeffiecient r
+# - Pearsons r konfidensintervall
 # - Signifikanstest av r
 # - Enkel linjär OLS regression (Y = α + βX)
 # - Analys av varians (one-way ANOVA)
@@ -77,6 +78,30 @@ pearsonkorrelation <- function(x, y)
     SumYSquared <- SumYSquared + ((y[i] - mean(y)) ^ 2)     # Kvadrera avvikelserna från medelvärdet för Y.
   }
   return(SumXY / sqrt(SumXSquared * SumYSquared))
+}
+
+
+# Räkna ut korrelationens (r) konfidensintervall vid en givan sampelstorlek (n).
+korrelationkonfidensintervall <- function(r, n, z.level=1.96)
+{
+  # Förutsätter 95 % konfidensnivå (z.level=1.96) om inget annat anges.
+  # Baserad på formlerna som finns http://davidmlane.com/hyperstat/B8544.html
+
+  # Konvertera r till z (kallas också Fisher Z transformation). 
+  z = 0.5 * (log(1 + r) - log(1 - r))
+
+  # Variansen på z.
+  sigmaz <- (1 / sqrt(n - 3))
+  
+  # Nedre och övre gränsen för z (på 95 %-nivån eller dylikt).
+  z.lower <- z - (z.level * sigmaz)
+  z.upper <- z + (z.level * sigmaz)
+  
+  # Konvertera z tillbaka till r (inverse Fisher Z transformation).
+  r.lower <- (exp(2 * z.lower) - 1) / (exp(2 * z.lower) + 1)
+  r.upper <- (exp(2 * z.upper) - 1) / (exp(2 * z.upper) + 1)
+  
+  return(c(r.lower, r.upper))
 }
 
 
@@ -302,6 +327,10 @@ cov(x, y)
 
 pearsonkorrelation(x, y)
 cor(x, y)
+
+korrelationkonfidensintervall(r = .9, n = 100)
+library(psychometric) # install.packages("psychometric")
+CIr(r = .9, n = 100, level = .95)
 
 pearsonkorrelationsignifikanstest(x, y)
 cor.test(x, y)
