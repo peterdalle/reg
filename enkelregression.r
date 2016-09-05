@@ -10,14 +10,15 @@
 # - Signifikanstest av r
 # - Enkel linjär OLS regression (Y = α + βX)
 # - Analys av varians (one-way ANOVA)
-# - (T-test)
+# - One sample t-test
+# - Two sample t-test (independent/unpaired)
 # 
 # Dessa jämförs sedan med de inbyggda funktionerna i R för att se att rätt värde
 # räknats ut. Funktionerna är långsamma, överdrivet explicita och uppdelade något
 # felaktigt (kvadratsummorna ligger exempelvis i predicera-funktionen), men
 # tanken är att man någorlunda enkelt ser vad som händer i varje steg.
 #
-# Peter M. Dahlgren 2016-04-09
+# Peter M. Dahlgren 2016-04-09 och framåt
 # -----------------------------------------------------------------------------
 
 # Först skapar vi ett simpelt dataset för regressionen (formel: y ~ x).
@@ -32,8 +33,8 @@ group3 <- c(14,12,10)
 # Skapa även ett dataset som passar R:s aov-funktion som vi ska jämföra med.
 groups.df <- data.frame(y=c(group1, group2, group3),      
                         group=as.factor(c(rep(1, length(group1)), # Notera att vi måste säga till aov() vilken som är
-                                rep(2, length(group2)),           # gruppvariabel ("group") genom att passera as.factor-funktionen.
-                                rep(3, length(group3)))))         # Testa utan så får du se det skeva resultatet.
+                                          rep(2, length(group2)),           # gruppvariabel ("group") genom att passera as.factor-funktionen.
+                                          rep(3, length(group3)))))         # Testa utan så får du se det skeva resultatet.
 
 
 # Räkna ut variansen.
@@ -86,10 +87,10 @@ korrelationkonfidensintervall <- function(r, n, z.level=1.96)
 {
   # Förutsätter 95 % konfidensnivå (z.level=1.96) om inget annat anges.
   # Baserad på formlerna som finns http://davidmlane.com/hyperstat/B8544.html
-
+  
   # Konvertera r till z (kallas också Fisher Z transformation). 
   z = 0.5 * (log(1 + r) - log(1 - r))
-
+  
   # Variansen på z.
   sigmaz <- (1 / sqrt(n - 3))
   
@@ -129,9 +130,9 @@ standardavvikelse <- function(x)
 
 # Räkna ut intercept+b+beta i enkel linjär regression (1 prediktorvariabel, OLS).
 enkellinjarregression <- function(y, x)
-  {
+{
   N <- length(x)
-    
+  
   # Ostandardiserad (b) regressionskoefficient.
   b.SumXY <- 0
   b.SumXSquared <- 0
@@ -141,7 +142,7 @@ enkellinjarregression <- function(y, x)
     b.SumXSquared <- b.SumXSquared + ((x[i] - mean(x)) ^ 2)
   }
   b <- (b.SumXY / b.SumXSquared) # Slutliga ostandardiserad regressionskoefficienten (b).
-    
+  
   # Standardiserad (beta) regressionskoefficient.
   beta.SumXY <- 0
   beta.SumXSquared <- 0
@@ -153,9 +154,9 @@ enkellinjarregression <- function(y, x)
     z.y <- (y[i] - mean(y)) / standardavvikelse(y)
     beta.SumXY <- beta.SumXY + (z.y * z.x)           # Multiplicera Z-scores för X och Y.
     beta.SumXSquared <- beta.SumXSquared + (z.x ^ 2) # Vi kvadrerar därmed prediktorns z-score snarare än x.
-    }
+  }
   beta <- (beta.SumXY / beta.SumXSquared) # Slutliga beta-koefficienten.
-    
+  
   # Intercept/constant.
   intercept <- mean(y) - (b * mean(x))
   
@@ -176,7 +177,7 @@ predicera <- function(y, x)
   beta <- reg[3]      # beta-koefficient.
   N <- length(y)      # Antal observationer.
   k <- 1              # Antal oberoende variabler. Vi har ju bara en prediktor (x).
-    
+  
   # Räkna ut residualerna.
   ss.res <- 0 # Residualkvadratsumma (residual sum of squares).
   ss.reg <- 0 # Regressionskvadratsumma (regression sum of squares).
@@ -213,40 +214,67 @@ predicera <- function(y, x)
   # Konfidensintervall för b.
   ci.lower <- b - (t.crit * b.stderr) # Nedre gräns.
   ci.upper <- b + (t.crit * b.stderr) # Övre gräns.
-      
+  
   # Fishers F för hela modellen (vilket alltid bör vara >1 om vi gjort rätt då distributionen bara har en svans).
   # Notera också att t^2 = F.
   Fval <- (R2 / k) / ((1-R2) / (N-k-1))
   
   # Räkna ut p-värde.
   p <- pt(-abs(t), df) * 2  # Tack till @krstoffr för denna! https://twitter.com/krstoffr/status/720895719561945088
-    
+  
   # ----------------
   # Frågor just nu:
   # Hur räknar man ut std err och t på intercept?
   # Hur räknar man ut p på intercept?
-  # Hur räknar man ut p på hela modellen (från F)? Är inte p för b samma som för modellen då det är en enkel regression?
   # ----------------
-    
+  
   # Gör någorlunda läsbar text av resultaten.
   text <- paste("Residual standard error: ", round(err.sd, 3),
-                  "  R-squared: ", round(R2, 3), 
-                  "  R-squared adj: ", round(R2adj, 3),
-                  "  b std.err: ", round(b.stderr, 3),
-                  "  F: ", round(Fval, 3),
-                  "  p: ", p,
-                  "  df: ", N-k-1, ", ", k, 
-                  "  t:", round(t, 3),
-                  "  CI för b: [", round(ci.lower, 2) ,", ", round(ci.upper, 2),"]",
+                "  R-squared: ", round(R2, 3), 
+                "  R-squared adj: ", round(R2adj, 3),
+                "  b std.err: ", round(b.stderr, 3),
+                "  F: ", round(Fval, 3),
+                "  p: ", p,
+                "  df: ", N-k-1, ", ", k, 
+                "  t:", round(t, 3),
+                "  CI för b: [", round(ci.lower, 2) ,", ", round(ci.upper, 2),"]",
                 sep="")
   return(text)
 }
 
 
-# Jämför medelvärden i två grupper (t-test).
-ttest <- function(group1, group2)
+# One sample t-test (mu = populationens medelvärde).
+onesamplettest <- function(group1, mu)
 {
-  # TODO
+  N <- length(group1)                                  # Antal analysenheter.
+  t = (mean(group1) - mu) / sqrt(varians(group1) / N)    # T-värde. 
+  return(paste("t: ", round(t, 3), sep=""))
+}
+
+
+# Jämför medelvärden i två grupper (two samples t-test, independent/unpaired).
+twosamplettest <- function(group1, group2)
+{
+  N1 <- length(group1)    # Antal analysenheter.
+  N2 <- length(group2)    # Antal analysenheter.
+  
+  # Pooled sample variance (S-squared).
+  s.squared <- 0
+  x1.sigma <- 0
+  x2.sigma <-0
+  for (i in 1:N1)
+  {
+    x1.sigma <- x1.sigma + (group1[i] - mean(group1)) ^ 2   # Kvadrera avvikelserna från medelvärdet.
+    x2.sigma <- x2.sigma + (group2[i] - mean(group2)) ^ 2   # Kvadrera avvikelserna från medelvärdet.
+  }
+  df <- (N1 + N2 - 2)                        # Degrees of freedom.
+  s.squared <- (x1.sigma + x2.sigma) / df    # Pooled sample variance.
+  
+  # OBS: Nedanstående uträkning förutsätter att variansen är samma.
+  # Om variansen är olika, används en annan uträkning som är något mer komplicerad.
+  t <- (mean(group1) - mean(group2)) / sqrt(s.squared * ((1/N1) + (1/N2)))
+  
+  return(paste("t: ", round(t, 3), sep=""))
 }
 
 
@@ -299,7 +327,7 @@ onewayanova <- function(group1, group2, group3)
   r <- sqrt(eta)          # r är helt enkelt roten ur eta-square.
   
   # TODO: Lägg till Cohens d + Pooled Cohens d.
-      
+  
   # Skriv ut beskrivande text.
   text <- paste("SS between: ", round(ss.b, 2),
                 "  SS within: ", round(ss.w, 2),
@@ -351,6 +379,15 @@ summary(fit)
 # Residual standard error: 1.242 on 8 degrees of freedom
 # Multiple R-squared:  0.7696,  Adjusted R-squared:  0.7408 
 # F-statistic: 26.72 on 1 and 8 DF,  p-value: 0.0008537
+
+
+# One sample t-test.
+onesamplettest(group1, mu=10)
+t.test(group1, mu=10)
+
+# Two sample t-test.
+twosamplettest(group1, group2)
+t.test(group1, group2, var.equal=TRUE)
 
 # One-way ANOVA.
 onewayanova(group1, group2, group3)
